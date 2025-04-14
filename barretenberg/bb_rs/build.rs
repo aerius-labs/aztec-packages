@@ -38,6 +38,29 @@ fn main() {
         .build_target("bb")
         .build();
     }
+    // RISC Zero
+    else if target_os == "zkvm" || env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default() == "riscv32" {
+        // Get compiler and flags from environment variables
+        let cc = env::var("CC_riscv32im_risc0_zkvm_elf")
+            .unwrap_or_else(|_| "riscv32-unknown-elf-gcc".to_string());
+        let cxx = env::var("CXX_riscv32im_risc0_zkvm_elf")
+            .unwrap_or_else(|_| "riscv32-unknown-elf-g++".to_string());
+        let cflags = env::var("CFLAGS_riscv32im_risc0_zkvm_elf")
+            .unwrap_or_else(|_| "-march=rv32im".to_string());
+        
+        dst = Config::new("../cpp")
+            .generator("Ninja")
+            .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+            .configure_arg("-DCMAKE_SYSTEM_NAME=Linux") // Use "Linux" instead of "zkvm"
+            .configure_arg("-DCMAKE_SYSTEM_PROCESSOR=riscv32")
+            .configure_arg(&format!("-DCMAKE_C_COMPILER={}", cc))
+            .configure_arg(&format!("-DCMAKE_CXX_COMPILER={}", cxx))
+            .configure_arg(&format!("-DCMAKE_C_FLAGS={}", cflags))
+            .configure_arg(&format!("-DCMAKE_CXX_FLAGS={}", cflags))
+            .configure_arg("-DTRACY_ENABLE=OFF")
+            .build_target("bb")
+            .build();
+    }
     // MacOS and other platforms
     else {
         dst = Config::new("../cpp")
@@ -101,6 +124,29 @@ fn main() {
                 &format!("-I{}/build/include", dst.display()),
                 "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1",
                 "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
+            ]);
+    
+    } else if target_os == "zkvm" || env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default() == "riscv32" {
+        // Get compiler path
+        let cc = env::var("CC_riscv32im_risc0_zkvm_elf")
+            .unwrap_or_else(|_| "riscv32-unknown-elf-gcc".to_string());
+        
+        // Extract RISC-V toolchain directory from the compiler path
+        let toolchain_dir = PathBuf::from(&cc)
+            .parent()
+            .unwrap_or_else(|| PathBuf::from(".").as_path())
+            .parent()
+            .unwrap_or_else(|| PathBuf::from(".").as_path());
+        
+        let sysroot = toolchain_dir.join("riscv32-unknown-elf");
+        
+        builder = builder
+            .clang_args([
+                "-std=c++20",
+                "-xc++",
+                &format!("-I{}/build/include", dst.display()),
+                &format!("-I{}/include/c++/11.1.0", sysroot.display()),
+                &format!("-I{}/include", sysroot.display())
             ]);
     } else {
         builder = builder
